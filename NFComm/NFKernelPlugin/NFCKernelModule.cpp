@@ -10,7 +10,7 @@
 #include "NFComm/NFCore/NFCObject.h"
 #include "NFComm/NFCore/NFCDataList.h"
 #include "NFComm/NFCore/NFCRecord.h"
-#include "NFComm/NFCore/NFCMemManger.h"
+#include "NFComm/NFCore/NFCMemManager.h"
 #include "NFComm/NFPluginModule/NFGUID.h"
 #include "NFComm/NFMessageDefine/NFProtocolDefine.hpp"
 
@@ -182,9 +182,6 @@ NF_SHARE_PTR<NFIObject> NFCKernelModule::CreateObject(const NFGUID& self, const 
              xRecord->SetSave(pConfigRecordInfo->GetSave());
              xRecord->SetCache(pConfigRecordInfo->GetCache());
 			 xRecord->SetUpload(pConfigRecordInfo->GetUpload());
-
-
-
             
             pObject->AddRecordCallBack(pConfigRecordInfo->GetName(), this, &NFCKernelModule::OnRecordCommonEvent);
 
@@ -210,7 +207,7 @@ NF_SHARE_PTR<NFIObject> NFCKernelModule::CreateObject(const NFGUID& self, const 
             }
         }
 
-        DoEvent(ident, strClassName, CLASS_OBJECT_EVENT::COE_CREATE_NODATA, arg);
+        DoEvent(ident, strClassName, pObject->GetState(), arg);
 
         
         for (int i = 0; i < arg.GetCount() - 1; i += 2)
@@ -251,11 +248,23 @@ NF_SHARE_PTR<NFIObject> NFCKernelModule::CreateObject(const NFGUID& self, const 
         pObject->SetPropertyInt(NFrame::IObject::SceneID(), nSceneID);
         pObject->SetPropertyInt(NFrame::IObject::GroupID(), nGroupID);
 
-        DoEvent(ident, strClassName, COE_CREATE_LOADDATA, arg);
-        DoEvent(ident, strClassName, COE_CREATE_BEFORE_EFFECT, arg);
-        DoEvent(ident, strClassName, COE_CREATE_EFFECTDATA, arg);
-        DoEvent(ident, strClassName, COE_CREATE_AFTER_EFFECT, arg);
-        DoEvent(ident, strClassName, COE_CREATE_HASDATA, arg);
+		pObject->SetState(COE_CREATE_LOADDATA);
+		DoEvent(ident, strClassName, pObject->GetState(), arg);
+
+		pObject->SetState(COE_CREATE_BEFORE_EFFECT);
+		DoEvent(ident, strClassName, pObject->GetState(), arg);
+
+		pObject->SetState(COE_CREATE_EFFECTDATA);
+		DoEvent(ident, strClassName, pObject->GetState(), arg);
+
+		pObject->SetState(COE_CREATE_AFTER_EFFECT);
+		DoEvent(ident, strClassName, pObject->GetState(), arg);
+
+		pObject->SetState(COE_CREATE_HASDATA);
+		DoEvent(ident, strClassName, pObject->GetState(), arg);
+
+		pObject->SetState(COE_CREATE_FINISH);
+		DoEvent(ident, strClassName, pObject->GetState(), arg);
     }
 
     return pObject;
@@ -1554,7 +1563,7 @@ void NFCKernelModule::ProcessMemFree()
 
     nLastTime = pPluginManager->GetNowTime();
 
-    NFCMemManger::GetSingletonPtr()->FreeMem();
+    NFCMemManager::GetSingletonPtr()->FreeMem();
 }
 
 bool NFCKernelModule::DoEvent(const NFGUID& self, const std::string& strClassName, CLASS_OBJECT_EVENT eEvent, const NFIDataList& valueList)
