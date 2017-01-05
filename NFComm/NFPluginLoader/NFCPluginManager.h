@@ -24,6 +24,8 @@ public:
     NFCPluginManager();
     virtual ~NFCPluginManager();
 
+	virtual bool Awake();
+
 	virtual bool Init();
 
     virtual bool AfterInit();
@@ -34,7 +36,10 @@ public:
 
     virtual bool BeforeShut();
 
-    virtual bool Shut();
+	virtual bool Shut();
+
+	virtual bool Finalize();
+
 
     //////////////////////////////////////////////////////////////////////////
 
@@ -42,10 +47,9 @@ public:
 
     virtual void UnRegistered(NFIPlugin* pPlugin);
 
-    virtual bool StartReLoadState();
-
-    virtual bool EndReLoadState();
     //////////////////////////////////////////////////////////////////////////
+
+	virtual bool ReLoadPlugin(const std::string& strPluginDLLName);
 
     virtual NFIPlugin* FindPlugin(const std::string& strPluginName);
 
@@ -77,6 +81,10 @@ public:
 
 	virtual void SetLogConfigName(const std::string& strName);
 
+	virtual void SetGetFileContentFunctor(GET_FILECONTENT_FUNCTOR fun);
+
+	virtual bool GetFileContent(const std::string &strFileName, std::string &strContent);
+
 protected:
 	bool LoadPluginConfig();
 
@@ -106,6 +114,8 @@ private:
     PluginLibMap mPluginLibMap;
     PluginInstanceMap mPluginInstanceMap;
     ModuleInstanceMap mModuleInstanceMap;
+
+	GET_FILECONTENT_FUNCTOR mGetFileContentFunctor;
 };
 
 #endif

@@ -1201,6 +1201,47 @@ bool NFCKernelModule::GetGroupObjectList(const int nSceneID, const int nGroupID,
     return false;
 }
 
+bool NFCKernelModule::GetGroupObjectList(const int nSceneID, const int nGroupID, NFIDataList & list, const bool bPlayer)
+{
+	NF_SHARE_PTR<NFCSceneInfo> pSceneInfo = m_pSceneModule->GetElement(nSceneID);
+	if (pSceneInfo)
+	{
+
+		NF_SHARE_PTR<NFCSceneGroupInfo> pGroupInfo = pSceneInfo->GetElement(nGroupID);
+		if (pGroupInfo)
+		{
+			if (bPlayer)
+			{
+				NFGUID ident = NFGUID();
+				NF_SHARE_PTR<int> pRet = pGroupInfo->mxPlayerList.First(ident);
+				while (!ident.IsNull())
+				{
+					list.Add(ident);
+
+					ident = NFGUID();
+					pRet = pGroupInfo->mxPlayerList.Next(ident);
+				}
+			}
+			else
+			{
+				NFGUID ident = NFGUID();
+				NF_SHARE_PTR<int> pRet = pGroupInfo->mxOtherList.First(ident);
+				while (!ident.IsNull())
+				{
+					list.Add(ident);
+
+					ident = NFGUID();
+					pRet = pGroupInfo->mxOtherList.Next(ident);
+				}
+			}
+			
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool NFCKernelModule::GetGroupObjectList(const int nSceneID, const int nGroupID, const std::string & strClassName, NFIDataList & list)
 {
 	NFCDataList xDataList;
@@ -1275,27 +1316,17 @@ bool NFCKernelModule::LogInfo(const NFGUID ident)
     NF_SHARE_PTR<NFIObject> pObject = GetObject(ident);
     if (pObject)
     {
-        if (IsContainer(ident))
+        int nSceneID = GetPropertyInt(ident, "SceneID");
+
+        m_pLogModule->LogNormal(NFILogModule::NLL_INFO_NORMAL, ident, "//----------child object list-------- SceneID = ", nSceneID);
+
+        NFCDataList valObjectList;
+        int nCount = GetSceneOnLineList(nSceneID, valObjectList);
+        for (int i  = 0; i < nCount; i++)
         {
-            int nSceneID = GetPropertyInt(ident, "SceneID");
-
-            m_pLogModule->LogNormal(NFILogModule::NLL_INFO_NORMAL, ident, "//----------child object list-------- SceneID = ", nSceneID);
-
-            NFCDataList valObjectList;
-            int nCount = GetSceneOnLineList(nSceneID, valObjectList);
-            for (int i  = 0; i < nCount; i++)
-            {
-                NFGUID targetIdent = valObjectList.Object(i);
-                LogInfo(targetIdent);
-            }
-        }
-        else
-        {
-            m_pLogModule->LogNormal(NFILogModule::NLL_INFO_NORMAL, ident, "//---------printf object start-------- ", "");
-
-
-            m_pLogModule->LogNormal(NFILogModule::NLL_INFO_NORMAL, ident, "//---------printf object end-------- ", "");
-        }
+           NFGUID targetIdent = valObjectList.Object(i);
+           LogInfo(targetIdent);
+       }
     }
     else
     {
@@ -1307,11 +1338,6 @@ bool NFCKernelModule::LogInfo(const NFGUID ident)
 
 int NFCKernelModule::OnPropertyCommonEvent(const NFGUID& self, const std::string& strPropertyName, const NFIDataList::TData& oldVar, const NFIDataList::TData& newVar)
 {
-    if (IsContainer(self))
-    {
-        return 0;
-    }
-
     std::list<PROPERTY_EVENT_FUNCTOR_PTR>::iterator it = mtCommonPropertyCallBackList.begin();
     for (it; it != mtCommonPropertyCallBackList.end(); it++)
     {
@@ -1326,26 +1352,6 @@ int NFCKernelModule::OnPropertyCommonEvent(const NFGUID& self, const std::string
 NF_SHARE_PTR<NFIObject> NFCKernelModule::GetObject(const NFGUID& ident)
 {
     return GetElement(ident);
-}
-
-bool NFCKernelModule::IsContainer(const NFGUID& self)
-{
-    NF_SHARE_PTR<NFIObject> pObject = GetObject(self);
-    if (pObject)
-    {
-        if (pObject->GetPropertyInt("GroupID") < 0)
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    m_pLogModule->LogObject(NFILogModule::NLL_ERROR_NORMAL, self, "There is no object", __FUNCTION__, __LINE__);
-
-    return false;
 }
 
 int NFCKernelModule::GetObjectByProperty(const int nSceneID, const std::string& strPropertyName, const NFIDataList& valueArg, NFIDataList& list)
@@ -1398,7 +1404,7 @@ int NFCKernelModule::GetObjectByProperty(const int nSceneID, const std::string& 
     return list.GetCount();
 }
 
-bool NFCKernelModule::ExistContainer(const int nSceneID)
+bool NFCKernelModule::ExistScene(const int nSceneID)
 {
     NF_SHARE_PTR<NFCSceneInfo> pSceneInfo = m_pSceneModule->GetElement(nSceneID);
     if (pSceneInfo)
@@ -1411,17 +1417,18 @@ bool NFCKernelModule::ExistContainer(const int nSceneID)
 
 bool NFCKernelModule::ExistObject(const NFGUID & ident)
 {
-	return false;
+	return ExistElement(ident);
 }
 
-bool NFCKernelModule::ExistObject(const NFGUID & ident, const int nContainerIndex)
+bool NFCKernelModule::ExistObject(const NFGUID & ident, const int nSceneID, const int nGroupID)
 {
-	return false;
-}
+	NF_SHARE_PTR<NFCSceneInfo> pSceneInfo = m_pSceneModule->GetElement(nSceneID);
+	if (pSceneInfo)
+	{
+		return true;
+	}
 
-bool NFCKernelModule::ExistObject(const NFGUID & ident, const int nContainerIndex, const int nGroupID)
-{
-	return false;
+	return pSceneInfo->ExistObjectInGroup(nGroupID, ident);
 }
 
 bool NFCKernelModule::DestroySelf(const NFGUID& self)
@@ -1432,11 +1439,6 @@ bool NFCKernelModule::DestroySelf(const NFGUID& self)
 
 int NFCKernelModule::OnRecordCommonEvent(const NFGUID& self, const RECORD_EVENT_DATA& xEventData, const NFIDataList::TData& oldVar, const NFIDataList::TData& newVar)
 {
-    if (IsContainer(self))
-    {
-        return 0;
-    }
-
     std::list<RECORD_EVENT_FUNCTOR_PTR>::iterator it = mtCommonRecordCallBackList.begin();
     for (it; it != mtCommonRecordCallBackList.end(); it++)
     {
@@ -1450,11 +1452,6 @@ int NFCKernelModule::OnRecordCommonEvent(const NFGUID& self, const RECORD_EVENT_
 
 int NFCKernelModule::OnClassCommonEvent(const NFGUID& self, const std::string& strClassName, const CLASS_OBJECT_EVENT eClassEvent, const NFIDataList& var)
 {
-    if (IsContainer(self))
-    {
-        return 0;
-    }
-
     std::list<CLASS_EVENT_FUNCTOR_PTR>::iterator it = mtCommonClassCallBackList.begin();
     for (it; it != mtCommonClassCallBackList.end(); it++)
     {

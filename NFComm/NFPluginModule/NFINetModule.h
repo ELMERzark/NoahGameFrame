@@ -35,7 +35,7 @@ enum NF_SERVER_TYPES
 
 ////////////////////////////////////////////////////////////////////////////
 
-
+//only use this macro when u has entered game server
 #define CLIENT_MSG_PROCESS(nSockIndex, nMsgID, msgData, nLen, msg)                 \
     NFGUID nPlayerID;                                \
     msg xMsg;                                           \
@@ -310,7 +310,7 @@ public:
 
     bool SendMsgToAllClientWithOutHead(const int nMsgID, const std::string& msg)
     {
-        return m_pNet->SendMsgToAllClientWithOutHead(nMsgID,msg.c_str(), msg.length());
+        return m_pNet->SendMsgToAllClientWithOutHead(nMsgID, msg.c_str(), msg.length());
     }
 
 	bool SendMsgPB(const google::protobuf::Message& xData, const uint32_t nSockIndex)

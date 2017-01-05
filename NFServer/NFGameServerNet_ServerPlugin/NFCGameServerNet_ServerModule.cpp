@@ -25,6 +25,7 @@ bool NFCGameServerNet_ServerModule::AfterInit()
 	m_pLogModule = pPluginManager->FindModule<NFILogModule>();
 	m_pEventModule = pPluginManager->FindModule<NFIEventModule>();
 	m_pSceneAOIModule = pPluginManager->FindModule<NFISceneAOIModule>();
+	m_pPlayerRedisModule = pPluginManager->FindModule<NFIPlayerRedisModule>();
 	
 	m_pGameServerToWorldModule = pPluginManager->FindModule<NFIGameServerToWorldModule>();
 
@@ -65,6 +66,8 @@ bool NFCGameServerNet_ServerModule::AfterInit()
 	m_pNetModule->AddReceiveCallBack(NFMsg::EGEC_REQ_JOIN_CHATGROUP, this, &NFCGameServerNet_ServerModule::OnTransWorld);
 	m_pNetModule->AddReceiveCallBack(NFMsg::EGEC_REQ_LEAVE_CHATGROUP, this, &NFCGameServerNet_ServerModule::OnTransWorld);
 	m_pNetModule->AddReceiveCallBack(NFMsg::EGEC_REQ_SUBSCRIPTION_CHATGROUP, this, &NFCGameServerNet_ServerModule::OnTransWorld);
+	m_pNetModule->AddReceiveCallBack(NFMsg::EGMI_REQ_MOVE, this, &NFCGameServerNet_ServerModule::OnClienReqMoveProcess);
+	m_pNetModule->AddReceiveCallBack(NFMsg::EGMI_REQ_MOVE_IMMUNE, this, &NFCGameServerNet_ServerModule::OnClienReqMoveImmuneProcess);
 
 	m_pNetModule->AddEventCallBack(this, &NFCGameServerNet_ServerModule::OnSocketPSEvent);
 
@@ -172,6 +175,7 @@ void NFCGameServerNet_ServerModule::OnClientConnected(const int nAddress)
 
 void NFCGameServerNet_ServerModule::OnClienEnterGameProcess(const int nSockIndex, const int nMsgID, const char* msg, const uint32_t nLen)
 {
+	//在进入游戏之前nPlayerID为其在网关的FD
 	NFGUID nClientID;
 	NFMsg::ReqEnterGameServer xMsg;
 	if (!m_pNetModule->ReceivePB(nSockIndex, nMsgID, msg, nLen, xMsg, nClientID))
@@ -181,41 +185,42 @@ void NFCGameServerNet_ServerModule::OnClienEnterGameProcess(const int nSockIndex
 
 	NFGUID nRoleID = NFINetModule::PBToNF(xMsg.id());
 
-    if (m_pKernelModule->GetObject(nRoleID))
-    {
-        m_pKernelModule->DestroyObject(nRoleID);
-    }
-    
+	if (m_pKernelModule->GetObject(nRoleID))
+	{
+		m_pKernelModule->DestroyObject(nRoleID);
+	}
+
 	//////////////////////////////////////////////////////////////////////////
 
-    NF_SHARE_PTR<NFCGameServerNet_ServerModule::GateBaseInfo>  pGateInfo = GetPlayerGateInfo(nRoleID);
-    if (nullptr != pGateInfo)
-    {
-        RemovePlayerGateInfo(nRoleID);
-    }
+	NF_SHARE_PTR<NFCGameServerNet_ServerModule::GateBaseInfo>  pGateInfo = GetPlayerGateInfo(nRoleID);
+	if (nullptr != pGateInfo)
+	{
+		RemovePlayerGateInfo(nRoleID);
+	}
 
-    NF_SHARE_PTR<NFCGameServerNet_ServerModule::GateServerInfo> pGateServereinfo = GetGateServerInfoBySockIndex(nSockIndex);
-    if (nullptr == pGateServereinfo)
-    {
-        return;
-    }
+	NF_SHARE_PTR<NFCGameServerNet_ServerModule::GateServerInfo> pGateServerinfo = GetGateServerInfoBySockIndex(nSockIndex);
+	if (nullptr == pGateServerinfo)
+	{
+		return;
+	}
 
-    int nGateID = -1;
-    if (pGateServereinfo->xServerData.pData)
-    {
-        nGateID = pGateServereinfo->xServerData.pData->server_id();
-    }
+	int nGateID = -1;
+	if (pGateServerinfo->xServerData.pData)
+	{
+		nGateID = pGateServerinfo->xServerData.pData->server_id();
+	}
 
-    if (nGateID < 0)
-    {
-        return;
-    }
- 
-    if (!AddPlayerGateInfo(nRoleID, nClientID, nGateID))
-    {
-        return;
-    }
+	if (nGateID < 0)
+	{
+		return;
+	}
 
+	if (!AddPlayerGateInfo(nRoleID, nClientID, nGateID))
+	{
+		return;
+	}
+
+	//默认1号场景
 	int nSceneID = 1;
 	NFCDataList var;
 	var.AddString(NFrame::Player::Name());
@@ -235,6 +240,11 @@ void NFCGameServerNet_ServerModule::OnClienEnterGameProcess(const int nSockIndex
 		return;
 	}
 
+	pObject->SetPropertyInt(NFrame::Player::GateID(), nGateID);
+	pObject->SetPropertyInt(NFrame::Player::GameID(), pPluginManager->GetAppID());
+
+	m_pKernelModule->DoEvent(pObject->Self(), NFrame::Player::ThisName(), CLASS_OBJECT_EVENT::COE_CREATE_FINISH, NFCDataList());
+
 	m_pSceneAOIModule->RequestEnterScene(pObject->Self(), nSceneID, 0, NFCDataList());
 }
 
@@ -252,12 +262,12 @@ void NFCGameServerNet_ServerModule::OnClienLeaveGameProcess(const int nSockIndex
 		return;
 	}
 
-    if (m_pKernelModule->GetObject(nPlayerID))
-    {
-        m_pKernelModule->DestroyObject(nPlayerID);
-    }
+	if (m_pKernelModule->GetObject(nPlayerID))
+	{
+		m_pKernelModule->DestroyObject(nPlayerID);
+	}
 
-    RemovePlayerGateInfo(nPlayerID);
+	RemovePlayerGateInfo(nPlayerID);
 }
 
 int NFCGameServerNet_ServerModule::OnPropertyEnter(const NFIDataList& argVar, const NFGUID& self)
@@ -977,16 +987,7 @@ int NFCGameServerNet_ServerModule::OnObjectListLeave(const NFIDataList& self, co
 
 int NFCGameServerNet_ServerModule::OnObjectClassEvent(const NFGUID& self, const std::string& strClassName, const CLASS_OBJECT_EVENT eClassEvent, const NFIDataList& var)
 {
-	if (CLASS_OBJECT_EVENT::COE_DESTROY == eClassEvent)
-	{
-		//SaveDataToNoSql( self, true );
-		m_pLogModule->LogNormal(NFILogModule::NLL_INFO_NORMAL, self, "Player Offline", "");
-	}
-	else if (CLASS_OBJECT_EVENT::COE_CREATE_LOADDATA == eClassEvent)
-	{
-		//LoadDataFormNoSql( self );
-	}
-	else if (CLASS_OBJECT_EVENT::COE_CREATE_NODATA == eClassEvent)
+	if (CLASS_OBJECT_EVENT::COE_CREATE_NODATA == eClassEvent)
 	{
 		NF_SHARE_PTR<GateBaseInfo> pDataBase = mRoleBaseData.GetElement(self);
 		if (pDataBase)
@@ -1039,7 +1040,6 @@ int NFCGameServerNet_ServerModule::OnSwapSceneResultEvent(const NFGUID& self, co
 
 void NFCGameServerNet_ServerModule::OnReqiureRoleListProcess(const int nSockIndex, const int nMsgID, const char* msg, const uint32_t nLen)
 {
-	//fd
 	NFGUID nClientID;
 	NFMsg::ReqRoleList xMsg;
 	if (!m_pNetModule->ReceivePB(nSockIndex, nMsgID, msg, nLen, xMsg, nClientID))
@@ -1047,8 +1047,78 @@ void NFCGameServerNet_ServerModule::OnReqiureRoleListProcess(const int nSockInde
 		return;
 	}
 
-	NFMsg::AckRoleLiteInfoList xAckRoleLiteInfoList;
-	m_pNetModule->SendMsgPB(NFMsg::EGMI_ACK_ROLE_LIST, xAckRoleLiteInfoList, nSockIndex, nClientID);
+	NF_SHARE_PTR<NFCGameServerNet_ServerModule::GateServerInfo> pGateServerinfo = GetGateServerInfoBySockIndex(nSockIndex);
+	if (nullptr == pGateServerinfo)
+	{
+		return;
+	}
+
+	NFGUID nRoleID = m_pKernelModule->CreateGUID();
+
+	NF_SHARE_PTR<NFCGameServerNet_ServerModule::GateBaseInfo>  pGateInfo = GetPlayerGateInfo(nRoleID);
+	if (nullptr != pGateInfo)
+	{
+		RemovePlayerGateInfo(nClientID);
+	}
+
+	int nGateID = -1;
+	if (pGateServerinfo->xServerData.pData)
+	{
+		nGateID = pGateServerinfo->xServerData.pData->server_id();
+	}
+
+	if (nGateID < 0)
+	{
+		return;
+	}
+
+	if (!AddPlayerGateInfo(nRoleID, nClientID, nGateID))
+	{
+		return;
+	}
+
+	const std::string& strAccount = xMsg.account();
+
+	NFGUID xPlayerID;
+	m_pPlayerRedisModule->GetAccountRoleID(strAccount, xPlayerID);
+
+	NF_SHARE_PTR<NFIPropertyManager> xPlayerProperty = m_pPlayerRedisModule->GetPlayerCacheProperty(xPlayerID);
+
+	if (xPlayerProperty && xPlayerID != NULL_OBJECT)
+	{
+		NFMsg::AckRoleLiteInfoList xAckRoleLiteInfoList;
+		NFMsg::RoleLiteInfo* pData = xAckRoleLiteInfoList.add_char_data();
+		pData->mutable_id()->CopyFrom(NFINetModule::NFToPB(xPlayerID));
+		pData->set_game_id(pPluginManager->GetAppID());
+		pData->set_career(0);
+		pData->set_sex(0);
+		pData->set_race(0);
+		pData->set_noob_name(xPlayerProperty->GetPropertyString(NFrame::Player::Name()));
+		pData->set_role_level(0);
+		pData->set_delete_time(0);
+		pData->set_reg_time(0);
+		pData->set_last_offline_time(0);
+		pData->set_last_offline_ip(0);
+		pData->set_view_record("");
+		SendMsgPBToGate(NFMsg::EGMI_ACK_ROLE_LIST, xAckRoleLiteInfoList, nRoleID);
+
+		NF_SHARE_PTR<NFCGameServerNet_ServerModule::GateBaseInfo>  pGateInfo = GetPlayerGateInfo(nRoleID);
+		if (nullptr != pGateInfo)
+		{
+			RemovePlayerGateInfo(nRoleID);
+		}
+
+		if (!AddPlayerGateInfo(xPlayerID, nClientID, nGateID))
+		{
+			return;
+		}
+	}
+	else
+	{
+		//没有角色
+		NFMsg::AckRoleLiteInfoList xAckRoleLiteInfoList;
+		SendMsgPBToGate(NFMsg::EGMI_ACK_ROLE_LIST, xAckRoleLiteInfoList, nRoleID);
+	}
 }
 
 void NFCGameServerNet_ServerModule::OnCreateRoleGameProcess(const int nSockIndex, const int nMsgID, const char* msg, const uint32_t nLen)
@@ -1060,22 +1130,29 @@ void NFCGameServerNet_ServerModule::OnCreateRoleGameProcess(const int nSockIndex
 		return;
 	}
 
-	NFMsg::AckRoleLiteInfoList xAckRoleLiteInfoList;
-	NFMsg::RoleLiteInfo* pData = xAckRoleLiteInfoList.add_char_data();
-	pData->mutable_id()->CopyFrom(NFINetModule::NFToPB(m_pKernelModule->CreateGUID()));
-	pData->set_career(xMsg.career());
-	pData->set_sex(xMsg.sex());
-	pData->set_race(xMsg.race());
-	pData->set_noob_name(xMsg.noob_name());
-	pData->set_game_id(xMsg.game_id());
-	pData->set_role_level(1);
-	pData->set_delete_time(0);
-	pData->set_reg_time(0);
-	pData->set_last_offline_time(0);
-	pData->set_last_offline_ip(0);
-	pData->set_view_record("");
+	const std::string& strAccount = xMsg.account();
+	const std::string& strName = xMsg.noob_name();
 
-	m_pNetModule->SendMsgPB(NFMsg::EGMI_ACK_ROLE_LIST, xAckRoleLiteInfoList, nSockIndex, nClientID);
+	NFGUID xID = m_pPlayerRedisModule->CreateRole(strAccount, strName);
+	if (xID != NULL_OBJECT)
+	{
+		NFMsg::AckRoleLiteInfoList xAckRoleLiteInfoList;
+		NFMsg::RoleLiteInfo* pData = xAckRoleLiteInfoList.add_char_data();
+		pData->mutable_id()->CopyFrom(NFINetModule::NFToPB(xID));
+		pData->set_career(xMsg.career());
+		pData->set_game_id(pPluginManager->GetAppID());
+		pData->set_sex(xMsg.sex());
+		pData->set_race(xMsg.race());
+		pData->set_noob_name(xMsg.noob_name());
+		pData->set_role_level(1);
+		pData->set_delete_time(0);
+		pData->set_reg_time(0);
+		pData->set_last_offline_time(0);
+		pData->set_last_offline_ip(0);
+		pData->set_view_record("");
+
+		m_pNetModule->SendMsgPB(NFMsg::EGMI_ACK_ROLE_LIST, xAckRoleLiteInfoList, nSockIndex, nClientID);
+	}
 }
 
 void NFCGameServerNet_ServerModule::OnDeleteRoleGameProcess(const int nSockIndex, const int nMsgID, const char* msg, const uint32_t nLen)
@@ -1097,6 +1174,30 @@ void NFCGameServerNet_ServerModule::OnClienSwapSceneProcess(const int nSockIndex
 	CLIENT_MSG_PROCESS(nSockIndex, nMsgID, msg, nLen, NFMsg::ReqAckSwapScene)
 
 	m_pSceneAOIModule->RequestEnterScene(pObject->Self(), xMsg.scene_id(), 0, NFCDataList());
+}
+
+void NFCGameServerNet_ServerModule::OnClienReqMoveProcess(const int nSockIndex, const int nMsgID, const char * msg, const uint32_t nLen)
+{
+	CLIENT_MSG_PROCESS_NO_OBJECT(nSockIndex, nMsgID, msg, nLen, NFMsg::ReqAckPlayerMove)
+
+	const NFGUID  &self = NFINetModule::PBToNF(xMsg.mover());
+
+	const int nSceneID = m_pKernelModule->GetPropertyInt(self, NFrame::Player::SceneID());
+	const int nGroupID = m_pKernelModule->GetPropertyInt(self, NFrame::Player::GroupID());
+
+	this->SendMsgPBToGate(NFMsg::EGMI_ACK_MOVE, xMsg, nSceneID, nGroupID);
+}
+
+void NFCGameServerNet_ServerModule::OnClienReqMoveImmuneProcess(const int nSockIndex, const int nMsgID, const char * msg, const uint32_t nLen)
+{
+	CLIENT_MSG_PROCESS_NO_OBJECT(nSockIndex, nMsgID, msg, nLen, NFMsg::ReqAckPlayerMove)
+
+	const NFGUID  &self = NFINetModule::PBToNF(xMsg.mover());
+
+	const int nSceneID = m_pKernelModule->GetPropertyInt(self, NFrame::Player::SceneID());
+	const int nGroupID = m_pKernelModule->GetPropertyInt(self, NFrame::Player::GroupID());
+
+	this->SendMsgPBToGate(NFMsg::EGMI_ACK_MOVE_IMMUNE, xMsg, nSceneID, nGroupID);
 }
 
 void NFCGameServerNet_ServerModule::OnClientPropertyIntProcess(const int nSockIndex, const int nMsgID, const char* msg, const uint32_t nLen)
@@ -1639,6 +1740,34 @@ void NFCGameServerNet_ServerModule::SendMsgPBToGate(const uint16_t nMsgID, const
 		if (pProxyData)
 		{
 			m_pNetModule->SendMsgPB(nMsgID, strMsg, pProxyData->xServerData.nFD, pData->xClientID);
+		}
+	}
+}
+
+void NFCGameServerNet_ServerModule::SendMsgPBToGate(const uint16_t nMsgID, google::protobuf::Message & xMsg, const int nSceneID, const int nGroupID)
+{
+	//care: batch
+	NFCDataList xList;
+	if (m_pKernelModule->GetGroupObjectList(nSceneID, nGroupID, xList, true))
+	{
+		for (int i = 0; i < xList.GetCount(); ++i)
+		{
+			NFGUID xObject = xList.Object(i);
+			this->SendMsgPBToGate(nMsgID, xMsg, xObject);
+		}
+	}
+}
+
+void NFCGameServerNet_ServerModule::SendMsgPBToGate(const uint16_t nMsgID, const std::string & strMsg, const int nSceneID, const int nGroupID)
+{
+	//care: batch
+	NFCDataList xList;
+	if (m_pKernelModule->GetGroupObjectList(nSceneID, nGroupID, xList, true))
+	{
+		for (int i = 0; i < xList.GetCount(); ++i)
+		{
+			NFGUID xObject = xList.Object(i);
+			this->SendMsgPBToGate(nMsgID, strMsg, xObject);
 		}
 	}
 }

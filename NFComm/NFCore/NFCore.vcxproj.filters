@@ -83,9 +83,6 @@
     <ClInclude Include="NFCComponentManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="NFCalendar.h">
-      <Filter>Unit</Filter>
-    </ClInclude>
     <ClInclude Include="NFIDataList.h">
       <Filter>Unit</Filter>
     </ClInclude>
@@ -102,6 +99,12 @@
       <Filter>Unit</Filter>
     </ClInclude>
     <ClInclude Include="NFCMemManager.h">
+      <Filter>Unit</Filter>
+    </ClInclude>
+    <ClInclude Include="NFDateTime.hpp">
+      <Filter>Unit</Filter>
+    </ClInclude>
+    <ClInclude Include="NFException.hpp">
       <Filter>Unit</Filter>
     </ClInclude>
   </ItemGroup>
@@ -123,9 +126,6 @@
     </ClCompile>
     <ClCompile Include="NFCObject.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="NFCalendar.cpp">
-      <Filter>Unit</Filter>
     </ClCompile>
     <ClCompile Include="NFCDataList.cpp">
       <Filter>Unit</Filter>

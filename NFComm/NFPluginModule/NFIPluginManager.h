@@ -11,6 +11,8 @@
 
 #include "NFIModule.h"
 
+typedef std::function<bool (const std::string &strFileName, std::string &strContent)> GET_FILECONTENT_FUNCTOR;
+
 #define FIND_MODULE(classBaseName, className)  \
 	assert((TIsDerived<classBaseName, NFIModule>::Result));
 
@@ -44,6 +46,8 @@ public:
 		return NULL;
 	}
 
+	virtual bool ReLoadPlugin(const std::string& strPluginDLLName) = 0;
+
     virtual void Registered(NFIPlugin* plugin) = 0;
 
     virtual void UnRegistered(NFIPlugin* plugin) = 0;
@@ -70,6 +74,9 @@ public:
 
 	virtual const std::string& GetLogConfigName() const = 0;
 	virtual void SetLogConfigName(const std::string& strName) = 0;
+
+	virtual void SetGetFileContentFunctor(GET_FILECONTENT_FUNCTOR fun) = 0;
+	virtual bool GetFileContent(const std::string &strFileName, std::string &strContent) = 0;
 };
 
 #endif

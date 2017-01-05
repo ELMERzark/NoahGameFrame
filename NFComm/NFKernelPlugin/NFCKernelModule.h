@@ -45,12 +45,10 @@ public:
 
     ///////////////////////////////////////////////////////////////////////
 
-    virtual bool IsContainer(const NFGUID& self);
-    virtual bool ExistContainer(const int nSceneID);
+    virtual bool ExistScene(const int nSceneID);
 
 	virtual bool ExistObject(const NFGUID& ident);
-	virtual bool ExistObject(const NFGUID& ident, const int nContainerIndex);
-	virtual bool ExistObject(const NFGUID& ident, const int nContainerIndex, const int nGroupID);
+	virtual bool ExistObject(const NFGUID& ident, const int nSceneID, const int nGroupID);
 
     virtual NF_SHARE_PTR<NFIObject> GetObject(const NFGUID& ident);
     virtual NF_SHARE_PTR<NFIObject> CreateObject(const NFGUID& self, const int nSceneID, const int nGroupID, const std::string& strClassName, const std::string& strConfigIndex, const NFIDataList& arg);
@@ -128,6 +126,7 @@ public:
     virtual bool ExitGroupScene(const int nSceneID, const int nGroupID);
 
 	virtual bool GetGroupObjectList(const int nSceneID, const int nGroupID, NFIDataList& list);
+	virtual bool GetGroupObjectList(const int nSceneID, const int nGroupID, NFIDataList& list, const bool bPlayer);
 	virtual bool GetGroupObjectList(const int nSceneID, const int nGroupID, const std::string& strClassName, NFIDataList& list);
 	virtual bool GetGroupObjectList(const int nSceneID, const int nGroupID, const std::string& strClassName, const NFGUID& noSelf, NFIDataList& list);
 	virtual int GetObjectByProperty(const int nSceneID, const std::string& strPropertyName, const NFIDataList& valueArgArg, NFIDataList& list);
