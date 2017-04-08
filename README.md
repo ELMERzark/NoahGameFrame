@@ -1,5 +1,6 @@
 # NoahGameFrame
-##### Copyright © http://www.noahframe.com
+#####  http://www.noahframe.com
+##### Forum: http://bbs.noahframe.com/forum.php
 
 [![Join the chat at https://gitter.im/ketoo/NoahGameFrame](https://badges.gitter.im/ketoo/NoahGameFrame.svg)](https://gitter.im/ketoo/NoahGameFrame?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
@@ -63,11 +64,12 @@ svn checkout https://github.com/ketoo/NoahGameFrame
 ### MSVC >= 2015
 
 1. Git pull all source
-2. Run **install.bat**
-3. Open the solution: **NoahFrame.sln**
-4. Build the solution
-5. Run **GenerateConfigXML.bat** to generate configuration files
-6. Run the binary file by **_Out/Debug/rund.bat**
+2. Run **install4vs.bat**
+3. Open the solution: **NoahFrame.sln**, build FileProcessTool project
+4. Run **GenerateConfigXML.bat** to generate configuration files
+5. Open the solution: **NoahFrame.sln**
+6. Build the solution(if u build failed, please build again(not rebuild))
+7. Run the binary file by **_Out/Debug/rund.bat**
 
 ### CodeBlocks >= 13.1(Only in linux)
 
@@ -81,10 +83,10 @@ svn checkout https://github.com/ketoo/NoahGameFrame
 
 ### CMake
 1. Git pull all source
-2. Install cmake[>= 2.8] please choose options for installing: **Add CMake to the system PATH for all users and restart your computer**
+2. Install cmake[>= 3.1] please choose options for installing: **Add CMake to the system PATH for all users and restart your computer**
 3. Install VS2015 or gcc[>= 4.8]
 4. Run **install4cmake.bat** or **install4cmake.sh** to build NF
-5. Run the binary file by **_Out/Debug/rund.bat** or **_Out/Debug/rund.sh**
+5. Run the binary file by **_Out/rund.bat** or **_Out/rund.sh**
 
 ### JAVA Project
 WebSite:  https://github.com/NFGameTeam/NFrame-java
